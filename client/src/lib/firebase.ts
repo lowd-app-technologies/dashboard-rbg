@@ -30,8 +30,13 @@ const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 // Authentication functions
-export const loginWithEmail = (email: string, password: string) => {
-  return signInWithEmailAndPassword(auth, email, password);
+export const loginWithEmail = async (email: string, password: string) => {
+  try {
+    return await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    console.error("Email login error:", error);
+    throw error;
+  }
 };
 
 export const registerWithEmail = async (email: string, password: string, displayName: string) => {
@@ -51,24 +56,37 @@ export const registerWithEmail = async (email: string, password: string, display
 };
 
 export const loginWithGoogle = async () => {
-  const userCredential = await signInWithPopup(auth, googleProvider);
-  
-  // Check if user document exists in Firestore
-  const userDocRef = doc(db, "users", userCredential.user.uid);
-  const userDoc = await getDoc(userDocRef);
-  
-  // If not, create a new user document
-  if (!userDoc.exists()) {
-    await setDoc(userDocRef, {
-      uid: userCredential.user.uid,
-      email: userCredential.user.email,
-      displayName: userCredential.user.displayName,
-      photoURL: userCredential.user.photoURL,
-      createdAt: serverTimestamp(),
-    });
+  try {
+    // Use signInWithPopup instead of signInWithRedirect to avoid domain issues
+    const userCredential = await signInWithPopup(auth, googleProvider);
+    
+    // Check if user document exists in Firestore
+    const userDocRef = doc(db, "users", userCredential.user.uid);
+    const userDoc = await getDoc(userDocRef);
+    
+    // If not, create a new user document
+    if (!userDoc.exists()) {
+      await setDoc(userDocRef, {
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        displayName: userCredential.user.displayName,
+        photoURL: userCredential.user.photoURL,
+        createdAt: serverTimestamp(),
+      });
+    }
+    
+    return userCredential;
+  } catch (error) {
+    console.error("Google sign-in error:", error);
+    
+    // Mostra informações de depuração para ajudar com o problema de domínio
+    if (error.code === "auth/unauthorized-domain") {
+      console.log("Domínio não autorizado. Adicione este domínio ao Firebase Console:");
+      console.log(window.location.hostname);
+    }
+    
+    throw error;
   }
-  
-  return userCredential;
 };
 
 export const resetPassword = (email: string) => {
