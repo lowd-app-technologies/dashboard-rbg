@@ -8,7 +8,10 @@ import {
   Settings, 
   Menu, 
   X,
-  LogOut
+  LogOut,
+  Building2,
+  ShoppingBag,
+  Briefcase
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -58,14 +61,29 @@ export function DashboardLayout({ children, title, contentId }: DashboardLayoutP
                     title="Dashboard"
                   />
                   <SidebarNavItem
+                    href="/company-profile"
+                    icon={Building2}
+                    title="Empresa"
+                  />
+                  <SidebarNavItem
+                    href="/services"
+                    icon={ShoppingBag}
+                    title="Serviços"
+                  />
+                  <SidebarNavItem
+                    href="/job-offers"
+                    icon={Briefcase}
+                    title="Vagas"
+                  />
+                  <SidebarNavItem
                     href="/profile"
                     icon={User}
-                    title="Profile"
+                    title="Meu Perfil"
                   />
                   <SidebarNavItem
                     href="/settings"
                     icon={Settings}
-                    title="Settings"
+                    title="Configurações"
                   />
                 </SidebarNav>
               </div>
@@ -132,15 +150,33 @@ export function DashboardLayout({ children, title, contentId }: DashboardLayoutP
                       onClick={() => setSheetOpen(false)}
                     />
                     <SidebarNavItem
+                      href="/company-profile"
+                      icon={Building2}
+                      title="Empresa"
+                      onClick={() => setSheetOpen(false)}
+                    />
+                    <SidebarNavItem
+                      href="/services"
+                      icon={ShoppingBag}
+                      title="Serviços"
+                      onClick={() => setSheetOpen(false)}
+                    />
+                    <SidebarNavItem
+                      href="/job-offers"
+                      icon={Briefcase}
+                      title="Vagas"
+                      onClick={() => setSheetOpen(false)}
+                    />
+                    <SidebarNavItem
                       href="/profile"
                       icon={User}
-                      title="Profile"
+                      title="Meu Perfil"
                       onClick={() => setSheetOpen(false)}
                     />
                     <SidebarNavItem
                       href="/settings"
                       icon={Settings}
-                      title="Settings"
+                      title="Configurações"
                       onClick={() => setSheetOpen(false)}
                     />
                   </SidebarNav>
