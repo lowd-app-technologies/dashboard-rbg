@@ -54,15 +54,38 @@ function AuthRoute({ component: Component, ...rest }: { component: React.Compone
   return !user ? <Component {...rest} /> : null;
 }
 
+// Import additional pages
+import CompanyProfile from "@/pages/company-profile";
+import Services from "@/pages/services";
+import ServicePage from "@/pages/service";
+import JobOffers from "@/pages/job-offers";
+import JobOfferPage from "@/pages/job-offer";
+
 function Router() {
   return (
     <Switch>
+      {/* Auth routes */}
       <Route path="/login" component={() => <AuthRoute component={Login} />} />
       <Route path="/register" component={() => <AuthRoute component={Register} />} />
       <Route path="/forgot-password" component={() => <AuthRoute component={ForgotPassword} />} />
+      
+      {/* Protected routes */}
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+      
+      {/* Company management */}
+      <Route path="/company-profile" component={() => <ProtectedRoute component={CompanyProfile} />} />
+      
+      {/* Services management */}
+      <Route path="/services" component={() => <ProtectedRoute component={Services} />} />
+      <Route path="/service/:id" component={() => <ProtectedRoute component={ServicePage} />} />
+      
+      {/* Job offers management */}
+      <Route path="/job-offers" component={() => <ProtectedRoute component={JobOffers} />} />
+      <Route path="/job-offer/:id" component={() => <ProtectedRoute component={JobOfferPage} />} />
+      
+      {/* Default route */}
       <Route path="/" component={() => <AuthRoute component={Login} />} />
       <Route component={NotFound} />
     </Switch>
