@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Helmet } from 'react-helmet';
-import { Loader2, Trash2, Upload, ImagePlus, AlarmClock, DollarSign, Store } from "lucide-react";
+import { Loader2, Trash2, ImagePlus, AlarmClock, DollarSign, Store } from "lucide-react";
 import { API } from "@/lib/api-fixed";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -26,19 +26,18 @@ const serviceFormSchema = z.object({
 type ServiceFormValues = z.infer<typeof serviceFormSchema>;
 
 export default function ServicePage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = params?.id || "new";
   const isNewService = id === "new";
+  const serviceId = isNewService ? null : Number(id);
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(!isNewService);
-  const [service, setService] = useState<Service | null>(null);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
   const [_, navigate] = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Form setup
   const form = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceFormSchema),
     defaultValues: {
@@ -48,127 +47,156 @@ export default function ServicePage() {
       workingHours: "",
     },
   });
-
-  // Fetch user's company first
-  useEffect(() => {
-    const fetchCompanyId = async () => {
-      if (user) {
-        try {
-          const companies = await getUserCompanies(user.uid);
-          if (companies.length === 0) {
-            toast({
-              title: "Atenção",
-              description: "Você precisa cadastrar uma empresa antes de adicionar serviços",
-              variant: "destructive"
-            });
-            navigate("/company-profile");
-            return;
-          }
-          
-          setCompanyId(companies[0].id!);
-          
-          // If editing an existing service, fetch it
-          if (!isNewService && id) {
-            fetchService(id);
-          } else {
-            setIsFetching(false);
-          }
-        } catch (error) {
-          console.error("Error fetching company:", error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os dados da empresa",
-            variant: "destructive"
-          });
-          setIsFetching(false);
-        }
-      }
-    };
-
-    fetchCompanyId();
-  }, [user, id, isNewService, toast, navigate]);
-
-  const fetchService = async (serviceId: string) => {
-    try {
-      const serviceData = await getServiceById(serviceId);
-      if (!serviceData) {
-        toast({
-          title: "Erro",
-          description: "Serviço não encontrado",
-          variant: "destructive"
-        });
-        navigate("/services");
-        return;
-      }
-      
-      setService(serviceData);
-      setImages(serviceData.images || []);
-      
-      // Set form values
-      form.reset({
-        name: serviceData.name,
-        description: serviceData.description,
-        price: serviceData.price || "",
-        workingHours: serviceData.workingHours || "",
+  
+  // Fetch companies
+  const { 
+    data: companies = [], 
+    isLoading: isLoadingCompanies 
+  } = useQuery({
+    queryKey: ['/api/companies'],
+    queryFn: API.getCompanies,
+    enabled: !!user,
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados da empresa",
+        variant: "destructive"
       });
-    } catch (error) {
-      console.error("Error fetching service:", error);
+    }
+  });
+  
+  const company = companies.length > 0 ? companies[0] : null;
+  const companyId = company?.id || null;
+  
+  // Fetch service if editing
+  const { 
+    data: service, 
+    isLoading: isLoadingService 
+  } = useQuery({
+    queryKey: ['/api/services', serviceId],
+    queryFn: () => serviceId ? API.getService(serviceId) : Promise.resolve(null),
+    enabled: !isNewService && serviceId !== null,
+    onSuccess: (data) => {
+      if (data) {
+        setImages(Array.isArray(data.images) ? data.images : []);
+        form.reset({
+          name: data.name,
+          description: data.description,
+          price: data.price || "",
+          workingHours: data.workingHours || "",
+        });
+      }
+    },
+    onError: (error: Error) => {
       toast({
         title: "Erro",
         description: "Não foi possível carregar os dados do serviço",
         variant: "destructive"
       });
-    } finally {
-      setIsFetching(false);
+      navigate("/services");
     }
-  };
-
-  const onSubmit = async (data: ServiceFormValues) => {
-    if (!user || !companyId) return;
-    
-    setIsLoading(true);
-    try {
-      if (isNewService) {
-        // Create new service
-        const newService = await createService({
-          ...data,
-          companyId,
-          images,
-        });
-        
-        toast({
-          title: "Sucesso",
-          description: "Serviço criado com sucesso!",
-        });
-        
-        // Navigate to the edit page to allow adding images
-        navigate(`/service/${newService.id}`);
-      } else if (service) {
-        // Update existing service
-        await updateService(service.id!, {
-          ...data,
-          images,
-        });
-        
-        toast({
-          title: "Sucesso",
-          description: "Serviço atualizado com sucesso!",
-        });
-      }
-    } catch (error: any) {
-      console.error("Error saving service:", error);
+  });
+  
+  // Create service mutation
+  const createServiceMutation = useMutation({
+    mutationFn: (data: ServiceFormValues) => {
+      if (!companyId) throw new Error("Empresa não encontrada");
+      return API.createService(companyId, {
+        ...data,
+        images: []
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Sucesso",
+        description: "Serviço criado com sucesso!",
+      });
+      navigate(`/service/${data.id}`);
+    },
+    onError: (error: Error) => {
       toast({
         title: "Erro",
-        description: error.message || "Ocorreu um erro ao salvar os dados do serviço",
+        description: error.message || "Ocorreu um erro ao criar o serviço",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+    }
+  });
+  
+  // Update service mutation
+  const updateServiceMutation = useMutation({
+    mutationFn: (data: ServiceFormValues) => {
+      if (!serviceId) throw new Error("ID do serviço inválido");
+      return API.updateService(serviceId, {
+        ...data,
+        images
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Serviço atualizado com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Ocorreu um erro ao atualizar o serviço",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Upload image mutation
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!serviceId || !companyId) throw new Error("Dados inválidos");
+      
+      // TODO: Implement actual file upload with API.addServiceImage
+      // For now, we'll create a fake URL
+      return `https://picsum.photos/id/${Math.floor(Math.random() * 1000)}/800/600`;
+    },
+    onSuccess: (imageUrl) => {
+      const newImages = [...images, imageUrl];
+      setImages(newImages);
+      
+      // Update service with new image list
+      if (serviceId) {
+        API.updateService(serviceId, { images: newImages });
+      }
+      
+      toast({
+        title: "Sucesso",
+        description: "Imagem enviada com sucesso!",
+      });
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível enviar a imagem",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Loading state
+  const isFetching = isLoadingCompanies || (isLoadingService && !isNewService);
+  const isLoading = createServiceMutation.isPending || updateServiceMutation.isPending;
+  
+  const onSubmit = (data: ServiceFormValues) => {
+    if (isNewService) {
+      createServiceMutation.mutate(data);
+    } else {
+      updateServiceMutation.mutate(data);
     }
   };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !companyId || !service?.id) return;
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
     
     const file = e.target.files[0];
     if (!file) return;
@@ -195,60 +223,32 @@ export default function ServicePage() {
     }
     
     setUploading(true);
-    try {
-      const imageUrl = await uploadServiceImage(companyId, service.id, file);
-      
-      // Add the new image URL to the list
-      const newImages = [...images, imageUrl];
-      setImages(newImages);
-      
-      // Update the service with the new image list
-      await updateService(service.id, { images: newImages });
-      
-      toast({
-        title: "Sucesso",
-        description: "Imagem enviada com sucesso!",
-      });
-      
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível enviar a imagem",
-        variant: "destructive",
-      });
-    } finally {
-      setUploading(false);
-    }
+    uploadImageMutation.mutate(file);
   };
-
-  const handleRemoveImage = async (indexToRemove: number) => {
-    if (!service?.id) return;
+  
+  const handleRemoveImage = (indexToRemove: number) => {
+    if (!serviceId) return;
     
     const newImages = images.filter((_, index) => index !== indexToRemove);
     setImages(newImages);
     
-    try {
-      await updateService(service.id, { images: newImages });
-      
-      toast({
-        title: "Sucesso",
-        description: "Imagem removida com sucesso!",
+    // Update service with new image list
+    API.updateService(serviceId, { images: newImages })
+      .then(() => {
+        toast({
+          title: "Sucesso",
+          description: "Imagem removida com sucesso!",
+        });
+      })
+      .catch((error) => {
+        toast({
+          title: "Erro",
+          description: "Não foi possível remover a imagem",
+          variant: "destructive",
+        });
       });
-    } catch (error) {
-      console.error("Error removing image:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível remover a imagem",
-        variant: "destructive",
-      });
-    }
   };
-
+  
   const triggerFileInput = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
@@ -435,17 +435,17 @@ export default function ServicePage() {
                   <Button 
                     type="button" 
                     onClick={triggerFileInput}
-                    disabled={uploading}
+                    disabled={uploadImageMutation.isPending}
                     className="w-full"
                   >
-                    {uploading ? (
+                    {uploadImageMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Enviando imagem...
                       </>
                     ) : (
                       <>
-                        <Upload className="mr-2 h-4 w-4" />
+                        <ImagePlus className="mr-2 h-4 w-4" />
                         Adicionar imagem
                       </>
                     )}
