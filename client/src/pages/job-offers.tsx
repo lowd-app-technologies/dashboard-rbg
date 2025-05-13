@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,13 +15,6 @@ import {
   Briefcase,
   Building2
 } from "lucide-react";
-import { 
-  JobOffer, 
-  Company, 
-  getUserCompanies, 
-  getCompanyJobOffers, 
-  deleteJobOffer
-} from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { 
@@ -36,53 +29,61 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { API } from "@/lib/api-fixed";
 
 export default function JobOffers() {
   const { user } = useAuth();
-  const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
-  const [company, setCompany] = useState<Company | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [jobOfferToDelete, setJobOfferToDelete] = useState<number | null>(null);
   const { toast } = useToast();
   const [_, navigate] = useLocation();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (user) {
-        try {
-          // First get the user's company
-          const companies = await getUserCompanies(user.uid);
-          
-          if (companies.length === 0) {
-            // User doesn't have a company yet
-            setIsLoading(false);
-            return;
-          }
-          
-          const companyData = companies[0];
-          setCompany(companyData);
-          
-          // Then get the company's job offers
-          const jobOffersData = await getCompanyJobOffers(companyData.id!);
-          setJobOffers(jobOffersData);
-        } catch (error) {
-          console.error("Error fetching data:", error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar as vagas de trabalho",
-            variant: "destructive"
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
+  // Fetch companies
+  const { data: companies = [], isLoading: isLoadingCompanies } = useQuery({
+    queryKey: ['/api/companies'],
+    queryFn: API.getCompanies,
+    enabled: !!user
+  });
+  
+  const company = companies.length > 0 ? companies[0] : null;
+  
+  // Fetch job offers for this company
+  const { 
+    data: jobOffers = [] as any[], 
+    isLoading: isLoadingJobOffers,
+    refetch: refetchJobOffers
+  } = useQuery({
+    queryKey: ['/api/companies', company?.id, 'job-offers'],
+    queryFn: () => company ? API.getCompanyJobOffers(company.id) : Promise.resolve([]),
+    enabled: !!company
+  });
+  
+  const isLoading = isLoadingCompanies || isLoadingJobOffers;
 
-    fetchData();
-  }, [user, toast]);
+  // Delete job offer mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => API.deleteJobOffer(id),
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Vaga excluída com sucesso!"
+      });
+      refetchJobOffers();
+    },
+    onError: (error: Error) => {
+      console.error("Error deleting job offer:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir a vaga",
+        variant: "destructive"
+      });
+    },
+    onSettled: () => {
+      setJobOfferToDelete(null);
+    }
+  });
 
-  const handleCreateJob = () => {
+  const handleCreateJobOffer = () => {
     if (!company) {
       toast({
         title: "Atenção",
@@ -96,60 +97,32 @@ export default function JobOffers() {
     navigate("/job-offer/new");
   };
 
-  const handleEditJob = (jobId: string) => {
-    navigate(`/job-offer/${jobId}`);
+  const handleEditJobOffer = (jobOfferId: number) => {
+    navigate(`/job-offer/${jobOfferId}`);
   };
 
-  const handleDeleteClick = (jobId: string) => {
-    setJobToDelete(jobId);
+  const handleDeleteClick = (jobOfferId: number) => {
+    setJobOfferToDelete(jobOfferId);
   };
 
   const confirmDelete = async () => {
-    if (!jobToDelete) return;
-    
-    setIsDeleting(true);
-    try {
-      await deleteJobOffer(jobToDelete);
-      
-      // Update the job offers list
-      setJobOffers(jobOffers.filter(job => job.id !== jobToDelete));
-      
-      toast({
-        title: "Sucesso",
-        description: "Vaga de trabalho excluída com sucesso!"
-      });
-    } catch (error) {
-      console.error("Error deleting job offer:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível excluir a vaga de trabalho",
-        variant: "destructive"
-      });
-    } finally {
-      setIsDeleting(false);
-      setJobToDelete(null);
-    }
+    if (jobOfferToDelete === null) return;
+    deleteMutation.mutate(jobOfferToDelete);
   };
 
   const cancelDelete = () => {
-    setJobToDelete(null);
-  };
-
-  // Helper function to truncate text
-  const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + '...';
+    setJobOfferToDelete(null);
   };
 
   return (
     <>
       <Helmet>
-        <title>Vagas de Trabalho - NextAuth</title>
-        <meta name="description" content="Gerencie as vagas de trabalho da sua empresa" />
+        <title>Vagas - NextAuth</title>
+        <meta name="description" content="Gerencie as vagas de emprego da sua empresa" />
       </Helmet>
-      <DashboardLayout title="Vagas de Trabalho" contentId="job-offers-content">
+      <DashboardLayout title="Vagas de Emprego" contentId="job-offers-content">
         <div className="flex justify-end mb-6">
-          <Button onClick={handleCreateJob}>
+          <Button onClick={handleCreateJobOffer}>
             <Plus className="mr-2 h-4 w-4" />
             Nova Vaga
           </Button>
@@ -167,7 +140,7 @@ export default function JobOffers() {
                 <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Empresa não encontrada</h3>
                 <p className="text-gray-500 mb-4">
-                  Você precisa cadastrar sua empresa antes de adicionar vagas de trabalho.
+                  Você precisa cadastrar sua empresa antes de adicionar vagas.
                 </p>
                 <Button onClick={() => navigate("/company-profile")}>
                   Cadastrar Empresa
@@ -175,16 +148,16 @@ export default function JobOffers() {
               </div>
             </CardContent>
           </Card>
-        ) : jobOffers.length === 0 ? (
+        ) : (Array.isArray(jobOffers) && jobOffers.length === 0) ? (
           <Card>
             <CardContent className="pt-6">
               <div className="flex flex-col items-center justify-center text-center p-4">
                 <Briefcase className="h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Nenhuma vaga encontrada</h3>
                 <p className="text-gray-500 mb-4">
-                  Você ainda não cadastrou nenhuma vaga de trabalho para sua empresa.
+                  Você ainda não cadastrou nenhuma vaga para sua empresa.
                 </p>
-                <Button onClick={handleCreateJob}>
+                <Button onClick={handleCreateJobOffer}>
                   <Plus className="mr-2 h-4 w-4" />
                   Adicionar Vaga
                 </Button>
@@ -192,63 +165,59 @@ export default function JobOffers() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {jobOffers.map((job) => (
-              <Card key={job.id}>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {Array.isArray(jobOffers) && jobOffers.map((jobOffer: any) => (
+              <Card key={jobOffer.id} className="overflow-hidden">
                 <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle>{job.title}</CardTitle>
-                    <Badge>{job.employmentType}</Badge>
-                  </div>
-                  <CardDescription>
-                    {job.salaryRange && (
-                      <span className="font-semibold block">{job.salaryRange}</span>
-                    )}
-                    <span className="flex items-center mt-1">
-                      <Building2 className="h-3 w-3 mr-1" />
-                      {company.name}
-                    </span>
+                  <CardTitle className="flex items-start">
+                    <Briefcase className="h-5 w-5 mr-2 mt-1 flex-shrink-0" />
+                    <div>
+                      {jobOffer.title}
+                      <Badge variant="outline" className="ml-2">
+                        {jobOffer.employmentType}
+                      </Badge>
+                    </div>
+                  </CardTitle>
+                  <CardDescription className="line-clamp-3 mt-2">
+                    {jobOffer.description}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-medium">Descrição:</h4>
-                      <p className="text-sm text-gray-500 line-clamp-3">
-                        {job.description}
-                      </p>
-                    </div>
-                    
-                    {job.requirements && (
-                      <div>
-                        <h4 className="text-sm font-medium">Requisitos:</h4>
-                        <p className="text-sm text-gray-500 line-clamp-2">
-                          {job.requirements}
-                        </p>
+                    {jobOffer.salaryRange && (
+                      <div className="flex items-start">
+                        <span className="text-sm font-medium mr-1 whitespace-nowrap">Faixa salarial:</span>
+                        <span className="text-sm text-gray-500">{jobOffer.salaryRange}</span>
                       </div>
                     )}
                     
-                    <div className="space-y-2">
-                      {job.contactEmail && (
-                        <div className="flex items-center text-sm">
-                          <Mail className="h-4 w-4 mr-2 text-gray-500" />
-                          <span className="truncate">{job.contactEmail}</span>
-                        </div>
-                      )}
-                      {job.contactLink && (
-                        <div className="flex items-center text-sm">
-                          <LinkIcon className="h-4 w-4 mr-2 text-gray-500" />
-                          <a 
-                            href={job.contactLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-primary hover:underline truncate"
-                          >
-                            {truncateText(job.contactLink, 30)}
-                          </a>
-                        </div>
-                      )}
-                    </div>
+                    {jobOffer.requirements && (
+                      <div className="flex items-start">
+                        <span className="text-sm font-medium mr-1 whitespace-nowrap">Requisitos:</span>
+                        <span className="text-sm text-gray-500 line-clamp-2">{jobOffer.requirements}</span>
+                      </div>
+                    )}
+                    
+                    {jobOffer.contactEmail && (
+                      <div className="flex items-center">
+                        <Mail className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="text-sm">{jobOffer.contactEmail}</span>
+                      </div>
+                    )}
+                    
+                    {jobOffer.contactLink && (
+                      <div className="flex items-center">
+                        <LinkIcon className="h-4 w-4 mr-2 text-gray-500" />
+                        <a 
+                          href={jobOffer.contactLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline truncate"
+                        >
+                          {jobOffer.contactLink}
+                        </a>
+                      </div>
+                    )}
                   </div>
                   
                   <Separator className="my-4" />
@@ -257,7 +226,7 @@ export default function JobOffers() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => handleEditJob(job.id!)}
+                      onClick={() => handleEditJobOffer(jobOffer.id)}
                     >
                       <FileEdit className="h-4 w-4 mr-1" />
                       Editar
@@ -265,7 +234,7 @@ export default function JobOffers() {
                     <Button 
                       variant="destructive" 
                       size="sm"
-                      onClick={() => handleDeleteClick(job.id!)}
+                      onClick={() => handleDeleteClick(jobOffer.id)}
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
                       Excluir
@@ -278,23 +247,22 @@ export default function JobOffers() {
         )}
       </DashboardLayout>
       
-      <AlertDialog open={jobToDelete !== null} onOpenChange={cancelDelete}>
+      <AlertDialog open={jobOfferToDelete !== null} onOpenChange={cancelDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Isso excluirá permanentemente a vaga
-              de trabalho selecionada.
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente esta vaga.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDelete}
-              disabled={isDeleting}
+              disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting ? (
+              {deleteMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Excluindo...

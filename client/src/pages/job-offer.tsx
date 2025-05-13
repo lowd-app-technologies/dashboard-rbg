@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,13 +18,8 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Helmet } from 'react-helmet';
 import { Loader2, Mail, Link as LinkIcon, DollarSign, FileText, Briefcase, UserCheck } from "lucide-react";
-import { 
-  JobOffer, 
-  createJobOffer,
-  updateJobOffer,
-  getJobOfferById,
-  getUserCompanies,
-} from "@/lib/firebase";
+import { API } from "@/lib/api-fixed";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useParams, useLocation } from "wouter";
 
@@ -41,16 +36,15 @@ const jobOfferFormSchema = z.object({
 type JobOfferFormValues = z.infer<typeof jobOfferFormSchema>;
 
 export default function JobOfferPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = params?.id || "new";
   const isNewJobOffer = id === "new";
+  const jobOfferId = isNewJobOffer ? null : Number(id);
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(!isNewJobOffer);
-  const [jobOffer, setJobOffer] = useState<JobOffer | null>(null);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const { toast } = useToast();
   const [_, navigate] = useLocation();
   
+  // Form setup
   const form = useForm<JobOfferFormValues>({
     resolver: zodResolver(jobOfferFormSchema),
     defaultValues: {
@@ -63,149 +57,121 @@ export default function JobOfferPage() {
       contactLink: "",
     },
   });
-
-  // Fetch user's company first
-  useEffect(() => {
-    const fetchCompanyId = async () => {
-      if (user) {
-        try {
-          const companies = await getUserCompanies(user.uid);
-          if (companies.length === 0) {
-            toast({
-              title: "Atenção",
-              description: "Você precisa cadastrar uma empresa antes de adicionar vagas",
-              variant: "destructive"
-            });
-            navigate("/company-profile");
-            return;
-          }
-          
-          setCompanyId(companies[0].id!);
-          
-          // If editing an existing job offer, fetch it
-          if (!isNewJobOffer && id) {
-            fetchJobOffer(id);
-          } else {
-            setIsFetching(false);
-          }
-        } catch (error) {
-          console.error("Error fetching company:", error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os dados da empresa",
-            variant: "destructive"
-          });
-          setIsFetching(false);
-        }
-      }
-    };
-
-    fetchCompanyId();
-  }, [user, id, isNewJobOffer, toast, navigate]);
-
-  const fetchJobOffer = async (jobOfferId: string) => {
-    try {
-      const jobOfferData = await getJobOfferById(jobOfferId);
-      if (!jobOfferData) {
-        toast({
-          title: "Erro",
-          description: "Vaga de trabalho não encontrada",
-          variant: "destructive"
-        });
-        navigate("/job-offers");
-        return;
-      }
-      
-      setJobOffer(jobOfferData);
-      
-      // Set form values
-      form.reset({
-        title: jobOfferData.title,
-        description: jobOfferData.description,
-        employmentType: jobOfferData.employmentType,
-        salaryRange: jobOfferData.salaryRange || "",
-        requirements: jobOfferData.requirements || "",
-        contactEmail: jobOfferData.contactEmail || "",
-        contactLink: jobOfferData.contactLink || "",
+  
+  // Fetch companies
+  const { 
+    data: companies = [], 
+    isLoading: isLoadingCompanies 
+  } = useQuery({
+    queryKey: ['/api/companies'],
+    queryFn: API.getCompanies,
+    enabled: !!user,
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados da empresa",
+        variant: "destructive"
       });
-    } catch (error) {
-      console.error("Error fetching job offer:", error);
+    }
+  });
+  
+  const company = companies.length > 0 ? companies[0] : null;
+  const companyId = company?.id || null;
+  
+  // Fetch job offer if editing
+  const { 
+    data: jobOffer, 
+    isLoading: isLoadingJobOffer 
+  } = useQuery({
+    queryKey: ['/api/job-offers', jobOfferId],
+    queryFn: () => jobOfferId ? API.getJobOffer(jobOfferId) : Promise.resolve(null),
+    enabled: !isNewJobOffer && jobOfferId !== null,
+    onSuccess: (data) => {
+      if (data) {
+        form.reset({
+          title: data.title,
+          description: data.description,
+          employmentType: data.employmentType,
+          salaryRange: data.salaryRange || "",
+          requirements: data.requirements || "",
+          contactEmail: data.contactEmail || "",
+          contactLink: data.contactLink || "",
+        });
+      }
+    },
+    onError: (error: Error) => {
       toast({
         title: "Erro",
         description: "Não foi possível carregar os dados da vaga",
         variant: "destructive"
       });
-    } finally {
-      setIsFetching(false);
+      navigate("/job-offers");
     }
-  };
-
-  const onSubmit = async (data: JobOfferFormValues) => {
-    if (!user || !companyId) return;
-    
-    setIsLoading(true);
-    try {
-      if (isNewJobOffer) {
-        // Create new job offer
-        await createJobOffer({
-          ...data,
-          companyId,
-        });
-        
-        toast({
-          title: "Sucesso",
-          description: "Vaga de trabalho criada com sucesso!",
-        });
-        
-        // Navigate back to the job offers list
-        navigate("/job-offers");
-      } else if (jobOffer) {
-        // Update existing job offer
-        await updateJobOffer(jobOffer.id!, {
-          ...data,
-        });
-        
-        toast({
-          title: "Sucesso",
-          description: "Vaga de trabalho atualizada com sucesso!",
-        });
-        
-        // Navigate back to the job offers list
-        navigate("/job-offers");
-      }
-    } catch (error: any) {
-      console.error("Error saving job offer:", error);
+  });
+  
+  // Create job offer mutation
+  const createJobOfferMutation = useMutation({
+    mutationFn: (data: JobOfferFormValues) => {
+      if (!companyId) throw new Error("Empresa não encontrada");
+      return API.createJobOffer(companyId, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Vaga criada com sucesso!",
+      });
+      navigate("/job-offers");
+    },
+    onError: (error: Error) => {
       toast({
         title: "Erro",
-        description: error.message || "Ocorreu um erro ao salvar os dados da vaga",
+        description: error.message || "Ocorreu um erro ao criar a vaga",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+    }
+  });
+  
+  // Update job offer mutation
+  const updateJobOfferMutation = useMutation({
+    mutationFn: (data: JobOfferFormValues) => {
+      if (!jobOfferId) throw new Error("ID da vaga inválido");
+      return API.updateJobOffer(jobOfferId, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Vaga atualizada com sucesso!",
+      });
+      navigate("/job-offers");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Ocorreu um erro ao atualizar a vaga",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Loading state
+  const isFetching = isLoadingCompanies || (isLoadingJobOffer && !isNewJobOffer);
+  const isLoading = createJobOfferMutation.isPending || updateJobOfferMutation.isPending;
+  
+  const onSubmit = (data: JobOfferFormValues) => {
+    if (isNewJobOffer) {
+      createJobOfferMutation.mutate(data);
+    } else {
+      updateJobOfferMutation.mutate(data);
     }
   };
-
-  const employmentTypes = [
-    { value: "CLT", label: "CLT (Tempo Integral)" },
-    { value: "PJ", label: "Pessoa Jurídica" },
-    { value: "Estágio", label: "Estágio" },
-    { value: "Freelancer", label: "Freelancer" },
-    { value: "Temporário", label: "Temporário" },
-    { value: "Meio Período", label: "Meio Período" },
-  ];
 
   return (
     <>
       <Helmet>
-        <title>
-          {isNewJobOffer ? "Nova Vaga de Trabalho" : "Editar Vaga de Trabalho"} - NextAuth
-        </title>
-        <meta name="description" content="Cadastre ou edite uma vaga de trabalho da sua empresa" />
+        <title>{isNewJobOffer ? "Nova Vaga" : "Editar Vaga"} - NextAuth</title>
+        <meta name="description" content="Cadastre ou edite uma vaga de emprego da sua empresa" />
       </Helmet>
-      <DashboardLayout 
-        title={isNewJobOffer ? "Nova Vaga de Trabalho" : "Editar Vaga de Trabalho"} 
-        contentId="job-offer-content"
-      >
+      <DashboardLayout title={isNewJobOffer ? "Nova Vaga" : "Editar Vaga"} contentId="job-offer-content">
         {isFetching ? (
           <div className="flex items-center justify-center h-40">
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
@@ -216,12 +182,12 @@ export default function JobOfferPage() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Briefcase className="h-5 w-5 mr-2" />
-                {isNewJobOffer ? "Cadastrar nova vaga" : "Editar vaga de trabalho"}
+                {isNewJobOffer ? "Cadastrar nova vaga" : "Editar vaga"}
               </CardTitle>
               <CardDescription>
                 {isNewJobOffer 
-                  ? "Preencha os dados abaixo para cadastrar uma nova vaga de trabalho" 
-                  : "Atualize as informações da vaga de trabalho"}
+                  ? "Preencha os dados abaixo para cadastrar uma nova vaga" 
+                  : "Atualize as informações da vaga"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -234,7 +200,25 @@ export default function JobOfferPage() {
                       <FormItem>
                         <FormLabel>Título da vaga*</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ex: Desenvolvedor Full-Stack" {...field} />
+                          <Input placeholder="Ex: Desenvolvedor Full Stack" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descrição*</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Forneça uma descrição detalhada da vaga e das responsabilidades" 
+                            className="min-h-[120px]"
+                            {...field} 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -254,15 +238,15 @@ export default function JobOfferPage() {
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Selecione o tipo de contratação" />
+                                <SelectValue placeholder="Selecione..." />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {employmentTypes.map((type) => (
-                                <SelectItem key={type.value} value={type.value}>
-                                  {type.label}
-                                </SelectItem>
-                              ))}
+                              <SelectItem value="CLT">CLT</SelectItem>
+                              <SelectItem value="PJ">PJ</SelectItem>
+                              <SelectItem value="Estágio">Estágio</SelectItem>
+                              <SelectItem value="Temporário">Temporário</SelectItem>
+                              <SelectItem value="Freelancer">Freelancer</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -279,33 +263,13 @@ export default function JobOfferPage() {
                             <DollarSign className="mr-1 h-4 w-4" /> Faixa salarial
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="Ex: R$ 3.000 - R$ 5.000" {...field} />
+                            <Input placeholder="Ex: R$ 3.000 - R$ 4.500" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                  
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center">
-                          <FileText className="mr-1 h-4 w-4" /> Descrição da vaga*
-                        </FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="Detalhe as responsabilidades e atividades da vaga" 
-                            className="min-h-[120px]"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   
                   <FormField
                     control={form.control}
@@ -317,7 +281,7 @@ export default function JobOfferPage() {
                         </FormLabel>
                         <FormControl>
                           <Textarea 
-                            placeholder="Liste as habilidades, experiências e qualificações necessárias" 
+                            placeholder="Liste os requisitos e habilidades necessárias" 
                             className="min-h-[100px]"
                             {...field} 
                           />
@@ -337,7 +301,7 @@ export default function JobOfferPage() {
                             <Mail className="mr-1 h-4 w-4" /> Email para contato
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="rh@empresa.com" {...field} />
+                            <Input placeholder="contato@empresa.com" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -350,10 +314,10 @@ export default function JobOfferPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex items-center">
-                            <LinkIcon className="mr-1 h-4 w-4" /> Link para candidatura
+                            <LinkIcon className="mr-1 h-4 w-4" /> Link de inscrição
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="https://exemplo.com/vagas" {...field} />
+                            <Input placeholder="https://..." {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
