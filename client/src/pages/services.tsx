@@ -30,7 +30,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { API } from "@/lib/api-new";
+import { API } from "@/lib/api-fixed";
 
 export default function Services() {
   const { user } = useAuth();
@@ -148,7 +148,7 @@ export default function Services() {
               </div>
             </CardContent>
           </Card>
-        ) : services.length === 0 ? (
+        ) : (Array.isArray(services) && services.length === 0) ? (
           <Card>
             <CardContent className="pt-6">
               <div className="flex flex-col items-center justify-center text-center p-4">
@@ -166,7 +166,7 @@ export default function Services() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {services.map((service) => (
+            {Array.isArray(services) && services.map((service: any) => (
               <Card key={service.id} className="overflow-hidden">
                 {service.images && service.images.length > 0 ? (
                   <div className="aspect-video relative overflow-hidden">

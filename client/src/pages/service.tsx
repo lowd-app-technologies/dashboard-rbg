@@ -11,14 +11,8 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Helmet } from 'react-helmet';
 import { Loader2, Trash2, Upload, ImagePlus, AlarmClock, DollarSign, Store } from "lucide-react";
-import { 
-  Service, 
-  createService,
-  updateService,
-  getServiceById,
-  uploadServiceImage,
-  getUserCompanies,
-} from "@/lib/firebase";
+import { API } from "@/lib/api-fixed";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useParams, useLocation } from "wouter";
 

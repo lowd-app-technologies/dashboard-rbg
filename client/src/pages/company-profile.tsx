@@ -13,7 +13,7 @@ import { Helmet } from 'react-helmet';
 import { Loader2, Building2, Phone, Link as LinkIcon, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { API } from "@/lib/api-new";
+import { API } from "@/lib/api-fixed";
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: "Nome da empresa deve ter pelo menos 2 caracteres" }),
