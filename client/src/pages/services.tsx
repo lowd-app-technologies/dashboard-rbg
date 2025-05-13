@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,13 +15,6 @@ import {
   AlertCircle,
   ShoppingBag
 } from "lucide-react";
-import { 
-  Service, 
-  Company, 
-  getUserCompanies, 
-  getCompanyServices, 
-  deleteService
-} from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { 
@@ -36,51 +29,59 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { API } from "@/lib/api-new";
 
 export default function Services() {
   const { user } = useAuth();
-  const [services, setServices] = useState<Service[]>([]);
-  const [company, setCompany] = useState<Company | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<number | null>(null);
   const { toast } = useToast();
   const [_, navigate] = useLocation();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (user) {
-        try {
-          // First get the user's company
-          const companies = await getUserCompanies(user.uid);
-          
-          if (companies.length === 0) {
-            // User doesn't have a company yet
-            setIsLoading(false);
-            return;
-          }
-          
-          const companyData = companies[0];
-          setCompany(companyData);
-          
-          // Then get the company's services
-          const servicesData = await getCompanyServices(companyData.id!);
-          setServices(servicesData);
-        } catch (error) {
-          console.error("Error fetching data:", error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os serviços",
-            variant: "destructive"
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
+  // Fetch companies
+  const { data: companies = [], isLoading: isLoadingCompanies } = useQuery({
+    queryKey: ['/api/companies'],
+    queryFn: API.getCompanies,
+    enabled: !!user
+  });
+  
+  const company = companies.length > 0 ? companies[0] : null;
+  
+  // Fetch services for this company
+  const { 
+    data: services = [] as any[], 
+    isLoading: isLoadingServices,
+    refetch: refetchServices
+  } = useQuery({
+    queryKey: ['/api/companies', company?.id, 'services'],
+    queryFn: () => company ? API.getCompanyServices(company.id) : Promise.resolve([]),
+    enabled: !!company
+  });
+  
+  const isLoading = isLoadingCompanies || isLoadingServices;
 
-    fetchData();
-  }, [user, toast]);
+  // Delete service mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => API.deleteService(id),
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Serviço excluído com sucesso!"
+      });
+      refetchServices();
+    },
+    onError: (error: Error) => {
+      console.error("Error deleting service:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o serviço",
+        variant: "destructive"
+      });
+    },
+    onSettled: () => {
+      setServiceToDelete(null);
+    }
+  });
 
   const handleCreateService = () => {
     if (!company) {
@@ -96,39 +97,17 @@ export default function Services() {
     navigate("/service/new");
   };
 
-  const handleEditService = (serviceId: string) => {
+  const handleEditService = (serviceId: number) => {
     navigate(`/service/${serviceId}`);
   };
 
-  const handleDeleteClick = (serviceId: string) => {
+  const handleDeleteClick = (serviceId: number) => {
     setServiceToDelete(serviceId);
   };
 
   const confirmDelete = async () => {
-    if (!serviceToDelete) return;
-    
-    setIsDeleting(true);
-    try {
-      await deleteService(serviceToDelete);
-      
-      // Update the services list
-      setServices(services.filter(service => service.id !== serviceToDelete));
-      
-      toast({
-        title: "Sucesso",
-        description: "Serviço excluído com sucesso!"
-      });
-    } catch (error) {
-      console.error("Error deleting service:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível excluir o serviço",
-        variant: "destructive"
-      });
-    } finally {
-      setIsDeleting(false);
-      setServiceToDelete(null);
-    }
+    if (serviceToDelete === null) return;
+    deleteMutation.mutate(serviceToDelete);
   };
 
   const cancelDelete = () => {
@@ -205,7 +184,9 @@ export default function Services() {
                 <CardHeader>
                   <CardTitle className="flex justify-between items-start">
                     <span>{service.name}</span>
-                    <Badge variant="outline" className="ml-2">{service.images?.length || 0} foto(s)</Badge>
+                    <Badge variant="outline" className="ml-2">
+                      {Array.isArray(service.images) ? service.images.length : 0} foto(s)
+                    </Badge>
                   </CardTitle>
                   <CardDescription className="line-clamp-2">
                     {service.description}
@@ -233,7 +214,7 @@ export default function Services() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => handleEditService(service.id!)}
+                      onClick={() => handleEditService(service.id)}
                     >
                       <FileEdit className="h-4 w-4 mr-1" />
                       Editar
@@ -241,7 +222,7 @@ export default function Services() {
                     <Button 
                       variant="destructive" 
                       size="sm"
-                      onClick={() => handleDeleteClick(service.id!)}
+                      onClick={() => handleDeleteClick(service.id)}
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
                       Excluir
@@ -264,13 +245,13 @@ export default function Services() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDelete}
-              disabled={isDeleting}
+              disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting ? (
+              {deleteMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Excluindo...

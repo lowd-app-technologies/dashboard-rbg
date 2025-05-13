@@ -13,7 +13,7 @@ import { Helmet } from 'react-helmet';
 import { Loader2, Building2, Phone, Link as LinkIcon, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { API } from "@/lib/api";
+import { API } from "@/lib/api-new";
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: "Nome da empresa deve ter pelo menos 2 caracteres" }),
@@ -44,13 +44,13 @@ export default function CompanyProfile() {
   });
 
   // Fetch companies
-  const { data: companies, isLoading: isFetching, error } = useQuery({
+  const { data: companies = [], isLoading: isFetching, error } = useQuery({
     queryKey: ['/api/companies'],
     queryFn: API.getCompanies,
     enabled: !!user
   });
   
-  const company = companies && companies.length > 0 ? companies[0] : null;
+  const company = companies.length > 0 ? companies[0] : null;
 
   // Create company mutation
   const createCompanyMutation = useMutation({
