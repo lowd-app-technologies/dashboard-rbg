@@ -7,15 +7,17 @@ import {
   insertCompanySchema,
   insertServiceSchema,
   insertServiceImageSchema,
-  insertJobOfferSchema
+  insertJobOfferSchema,
+  User
 } from "@shared/schema";
 import { z } from "zod";
 
 // Helper function to get user entry in database from Firebase uid
-async function getUserByFirebaseUid(req: Request, res: Response) {
+async function getUserByFirebaseUid(req: Request, res: Response): Promise<User | null> {
   try {
     if (!req.user || !req.user.uid) {
-      return res.status(401).json({ message: "Unauthorized" });
+      res.status(401).json({ message: "Unauthorized" });
+      return null;
     }
     
     const dbUser = await storage.getUserByUid(req.user.uid);
@@ -25,7 +27,8 @@ async function getUserByFirebaseUid(req: Request, res: Response) {
       const userData = await getUserData(req.user.uid);
       
       if (!userData) {
-        return res.status(404).json({ message: "User not found" });
+        res.status(404).json({ message: "User not found" });
+        return null;
       }
       
       // Create user in database
@@ -68,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Also update in our database
       const dbUser = await getUserByFirebaseUid(req, res);
       
-      if (dbUser) {
+      if (dbUser && 'id' in dbUser) {
         await storage.updateUser(dbUser.id, { 
           displayName: displayName || null, 
           photoURL: photoURL || null
@@ -99,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const dbUser = await getUserByFirebaseUid(req, res);
       
-      if (!dbUser) {
+      if (!dbUser || !('id' in dbUser)) {
         return res.status(404).json({ message: "User not found" });
       }
       
@@ -128,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if user is the owner
       const dbUser = await getUserByFirebaseUid(req, res);
       
-      if (!dbUser || company.ownerId !== dbUser.id) {
+      if (!dbUser || !('id' in dbUser) || company.ownerId !== dbUser.id) {
         return res.status(403).json({ message: "Not authorized to view this company" });
       }
       
@@ -149,7 +152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const dbUser = await getUserByFirebaseUid(req, res);
       
-      if (!dbUser) {
+      if (!dbUser || !('id' in dbUser)) {
         return res.status(404).json({ message: "User not found" });
       }
       
@@ -190,7 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if user is the owner
       const dbUser = await getUserByFirebaseUid(req, res);
       
-      if (!dbUser || company.ownerId !== dbUser.id) {
+      if (!dbUser || !('id' in dbUser) || company.ownerId !== dbUser.id) {
         return res.status(403).json({ message: "Not authorized to update this company" });
       }
       
