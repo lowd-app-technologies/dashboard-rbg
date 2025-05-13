@@ -11,8 +11,9 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Helmet } from 'react-helmet';
 import { Loader2, Building2, Phone, Link as LinkIcon, MapPin } from "lucide-react";
-import { Company, createCompany, getUserCompanies, updateCompany } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { API } from "@/lib/api";
 
 const companyFormSchema = z.object({
   name: z.string().min(2, { message: "Nome da empresa deve ter pelo menos 2 caracteres" }),
@@ -28,8 +29,6 @@ type CompanyFormValues = z.infer<typeof companyFormSchema>;
 export default function CompanyProfile() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
-  const [company, setCompany] = useState<Company | null>(null);
   const { toast } = useToast();
   
   const form = useForm<CompanyFormValues>({
@@ -44,40 +43,76 @@ export default function CompanyProfile() {
     },
   });
 
-  useEffect(() => {
-    const fetchCompany = async () => {
-      if (user) {
-        try {
-          const companies = await getUserCompanies(user.uid);
-          if (companies.length > 0) {
-            const companyData = companies[0];
-            setCompany(companyData);
-            
-            // Set form values
-            form.reset({
-              name: companyData.name || "",
-              description: companyData.description || "",
-              cnpj: companyData.cnpj || "",
-              address: companyData.address || "",
-              phone: companyData.phone || "",
-              website: companyData.website || "",
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching company:", error);
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os dados da empresa",
-            variant: "destructive"
-          });
-        } finally {
-          setIsFetching(false);
-        }
-      }
-    };
+  // Fetch companies
+  const { data: companies, isLoading: isFetching, error } = useQuery({
+    queryKey: ['/api/companies'],
+    queryFn: API.getCompanies,
+    enabled: !!user
+  });
+  
+  const company = companies && companies.length > 0 ? companies[0] : null;
 
-    fetchCompany();
-  }, [user, form, toast]);
+  // Create company mutation
+  const createCompanyMutation = useMutation({
+    mutationFn: (data: CompanyFormValues) => API.createCompany(data),
+    onSuccess: (newCompany) => {
+      toast({
+        title: "Sucesso",
+        description: "Empresa criada com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Ocorreu um erro ao criar a empresa",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update company mutation
+  const updateCompanyMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number, data: CompanyFormValues }) => 
+      API.updateCompany(id, data),
+    onSuccess: () => {
+      toast({
+        title: "Sucesso",
+        description: "Perfil da empresa atualizado com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Ocorreu um erro ao atualizar a empresa",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Set form values when company data is loaded
+  useEffect(() => {
+    if (company) {
+      form.reset({
+        name: company.name || "",
+        description: company.description || "",
+        cnpj: company.cnpj || "",
+        address: company.address || "",
+        phone: company.phone || "",
+        website: company.website || "",
+      });
+    }
+  }, [company, form]);
+
+  // Handle error from the query
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados da empresa",
+        variant: "destructive"
+      });
+    }
+  }, [error, toast]);
 
   const onSubmit = async (data: CompanyFormValues) => {
     if (!user) return;
@@ -86,30 +121,14 @@ export default function CompanyProfile() {
     try {
       if (company) {
         // Update existing company
-        await updateCompany(company.id!, data);
-        toast({
-          title: "Sucesso",
-          description: "Perfil da empresa atualizado com sucesso!",
-        });
+        await updateCompanyMutation.mutateAsync({ id: company.id, data });
       } else {
         // Create new company
-        const newCompany = await createCompany({
-          ...data,
-          ownerId: user.uid,
-        });
-        setCompany(newCompany);
-        toast({
-          title: "Sucesso",
-          description: "Empresa criada com sucesso!",
-        });
+        await createCompanyMutation.mutateAsync(data);
       }
-    } catch (error: any) {
+    } catch (error) {
+      // Error handling is done in mutation callbacks
       console.error("Error saving company:", error);
-      toast({
-        title: "Erro",
-        description: error.message || "Ocorreu um erro ao salvar os dados da empresa",
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
     }
