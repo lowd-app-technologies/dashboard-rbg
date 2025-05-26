@@ -117,7 +117,7 @@ export default function JobOffers() {
   return (
     <>
       <Helmet>
-        <title>Vagas - NextAuth</title>
+        <title>Vagas - Systems RBG</title>
         <meta name="description" content="Gerencie as vagas de emprego da sua empresa" />
       </Helmet>
       <DashboardLayout title="Vagas de Emprego" contentId="job-offers-content">

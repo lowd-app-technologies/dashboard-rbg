@@ -85,8 +85,8 @@ export default function Settings() {
   return (
     <>
       <Helmet>
-        <title>Account Settings - NextAuth</title>
-        <meta name="description" content="Manage your NextAuth account settings, security options, and linked accounts." />
+        <title>Account Settings - Systems RBG</title>
+        <meta name="description" content="Manage your Systems RBG account settings, security options, and linked accounts." />
       </Helmet>
       <DashboardLayout title="Account Settings" contentId="settings-content">
         {/* Password Change Form */}

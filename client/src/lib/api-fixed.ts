@@ -1,77 +1,171 @@
-import { queryClient, getQueryFn, getQueryFnLegacy } from "./queryClient";
+import { queryClient } from "./queryClient";
+import { auth } from '@/lib/firebase';
+import { getAuth } from 'firebase/auth';
 
 // Helpers
 const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
-export async function apiGet<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    method: "GET",
-    credentials: "include",
+// Interceptador para incluir token em todas as requisições
+const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+  console.log('Fetching URL:', url);
+  
+  const token = await getAuth().currentUser?.getIdToken();
+  console.log('Generated token:', token ? token.substring(0, 20) + '...' : 'No token');
+  
+  return fetch(url, {
+    ...options,
     headers: {
+      ...options.headers,
       ...jsonHeaders,
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
   });
+};
 
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+async function getAuthHeaders() {
+  console.log('Getting auth headers...');
+  const auth = getAuth();
+  const user = auth.currentUser;
+  
+  if (!user) {
+    console.log('No user authenticated');
+    return {};
   }
+  
+  try {
+    const token = await user.getIdToken();
+    console.log('Auth token:', token.substring(0, 20) + '...');
+    return {
+      Authorization: `Bearer ${token}`
+    };
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    return {};
+  }
+}
 
-  return response.json();
+export async function apiGet<T>(url: string): Promise<T> {
+  console.log('API GET request:', url);
+  const authHeaders = await getAuthHeaders();
+  
+  try {
+    const response = await fetchWithAuth(url, {
+      method: "GET",
+      headers: {
+        ...jsonHeaders,
+        ...authHeaders,
+      },
+    });
+
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API error:', errorData);
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('API response data:', data);
+    return data;
+  } catch (error) {
+    console.error('API error:', error);
+    throw error;
+  }
 }
 
 export async function apiPost<T>(url: string, data: any): Promise<T> {
-  const response = await fetch(url, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      ...jsonHeaders,
-    },
-    body: JSON.stringify(data),
-  });
+  console.log('API POST request:', url);
+  const authHeaders = await getAuthHeaders();
+  
+  try {
+    const response = await fetchWithAuth(url, {
+      method: "POST",
+      headers: {
+        ...jsonHeaders,
+        ...authHeaders,
+      },
+      body: JSON.stringify(data),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `API error: ${response.status}`);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API error:', errorData);
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+
+    const dataResponse = await response.json();
+    console.log('API response data:', dataResponse);
+    return dataResponse;
+  } catch (error) {
+    console.error('API error:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export async function apiPut<T>(url: string, data: any): Promise<T> {
-  const response = await fetch(url, {
-    method: "PUT",
-    credentials: "include",
-    headers: {
-      ...jsonHeaders,
-    },
-    body: JSON.stringify(data),
-  });
+  console.log('API PUT request:', url);
+  const authHeaders = await getAuthHeaders();
+  
+  try {
+    const response = await fetchWithAuth(url, {
+      method: "PUT",
+      headers: {
+        ...jsonHeaders,
+        ...authHeaders,
+      },
+      body: JSON.stringify(data),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `API error: ${response.status}`);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API error:', errorData);
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+
+    const dataResponse = await response.json();
+    console.log('API response data:', dataResponse);
+    return dataResponse;
+  } catch (error) {
+    console.error('API error:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    method: "DELETE",
-    credentials: "include",
-    headers: {
-      ...jsonHeaders,
-    },
-  });
+  console.log('API DELETE request:', url);
+  const authHeaders = await getAuthHeaders();
+  
+  try {
+    const response = await fetchWithAuth(url, {
+      method: "DELETE",
+      headers: {
+        ...jsonHeaders,
+        ...authHeaders,
+      },
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `API error: ${response.status}`);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API error:', errorData);
+      throw new Error(errorData.message || `API error: ${response.status}`);
+    }
+
+    const dataResponse = await response.json();
+    console.log('API response data:', dataResponse);
+    return dataResponse;
+  } catch (error) {
+    console.error('API error:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
 // Define types to avoid 'in' operator issues

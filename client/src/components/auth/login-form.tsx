@@ -193,13 +193,7 @@ export function LoginForm() {
           </div>
         </div>
         
-        <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-          <h3 className="text-sm font-semibold text-blue-800 mb-2">Orientações para resolução de problemas:</h3>
-          <ul className="text-xs text-blue-700 list-disc pl-4">
-            <li>Para usar login com Google: adicione o domínio <code className="text-xs bg-blue-100 px-1 rounded">e281703b-3cc6-4612-8f1a-7d0ffca6d4fe-00-1xgwzt0n5xa3x.kirk.replit.dev</code> nas configurações do Firebase</li>
-            <li>Para teste rápido: use o login por email e senha com as credenciais pré-preenchidas</li>
-          </ul>
-        </div>
+       
       </form>
 
       <div className="text-center mt-4">

@@ -258,7 +258,7 @@ export default function ServicePage() {
   return (
     <>
       <Helmet>
-        <title>{isNewService ? "Novo Serviço" : "Editar Serviço"} - NextAuth</title>
+        <title>{isNewService ? "Novo Serviço" : "Editar Serviço"} - Systems RBG</title>
         <meta name="description" content="Cadastre ou edite um serviço da sua empresa" />
       </Helmet>
       <DashboardLayout title={isNewService ? "Novo Serviço" : "Editar Serviço"} contentId="service-content">

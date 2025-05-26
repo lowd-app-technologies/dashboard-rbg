@@ -77,8 +77,8 @@ export default function Profile() {
   return (
     <>
       <Helmet>
-        <title>Profile - NextAuth</title>
-        <meta name="description" content="View and edit your NextAuth profile information and account details." />
+        <title>Profile - Systems RBG</title>
+        <meta name="description" content="View and edit your Systems RBG profile information and account details." />
       </Helmet>
       <DashboardLayout title="Profile" contentId="profile-content">
         <Card>

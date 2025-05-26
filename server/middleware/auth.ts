@@ -17,27 +17,60 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     // Get the authorization header
     const authHeader = req.headers.authorization;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized: No token provided' });
+    if (!authHeader) {
+      console.log('No authorization header');
+      return res.status(401).json({ 
+        message: 'Unauthorized: No token provided',
+        error: 'No token provided'
+      });
+    }
+    
+    if (!authHeader.startsWith('Bearer ')) {
+      console.log('Invalid authorization header format');
+      return res.status(401).json({ 
+        message: 'Unauthorized: Invalid token format',
+        error: 'Invalid token format'
+      });
     }
     
     // Extract the token
-    const token = authHeader.split('Bearer ')[1];
+    const token = authHeader.split('Bearer ')[1].trim();
     
     if (!token) {
-      return res.status(401).json({ message: 'Unauthorized: Invalid token format' });
+      console.log('No token found in header');
+      return res.status(401).json({ 
+        message: 'Unauthorized: Invalid token format',
+        error: 'No token found'
+      });
     }
+
+    console.log('Verifying token:', token.substring(0, 20) + '...');
     
     // Verify the token
-    const decodedToken = await verifyToken(token);
-    
-    // Set the user in the request object
-    req.user = decodedToken;
-    req.token = token;
-    
-    next();
+    try {
+      const decodedToken = await verifyToken(token);
+      console.log('Token verified successfully:', {
+        uid: decodedToken.uid,
+        email: decodedToken.email
+      });
+      
+      // Set the user in the request object
+      req.user = decodedToken;
+      req.token = token;
+      
+      next();
+    } catch (error) {
+      console.error('Error verifying token:', error);
+      return res.status(401).json({ 
+        message: 'Unauthorized: Invalid token',
+        error: error instanceof Error ? error.message : 'Token verification failed'
+      });
+    }
   } catch (error) {
-    console.error('Authentication error:', error);
-    return res.status(401).json({ message: 'Unauthorized: Invalid token' });
+    console.error('Error in authentication middleware:', error);
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: error instanceof Error ? error.message : 'Authentication failed'
+    });
   }
 };

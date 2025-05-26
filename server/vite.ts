@@ -41,9 +41,14 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  
+  // Apenas serve o index.html para rotas que não começam com /api
   app.use("*", async (req, res, next) => {
-    const url = req.originalUrl;
+    if (req.path.startsWith("/api")) {
+      return next();
+    }
 
+    const url = req.originalUrl;
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,

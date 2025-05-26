@@ -103,14 +103,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dbUser = await getUserByFirebaseUid(req, res);
       
       if (!dbUser || !('id' in dbUser)) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ 
+          message: "User not found",
+          error: "User not found in database"
+        });
       }
       
       const companies = await storage.getUserCompanies(dbUser.id);
       res.json(companies);
     } catch (error) {
       console.error("Error getting companies:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ 
+        message: "Internal server error",
+        error: error instanceof Error ? error.message : "Failed to fetch companies"
+      });
     }
   });
   
@@ -119,26 +125,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = parseInt(req.params.id);
       
       if (isNaN(companyId)) {
-        return res.status(400).json({ message: "Invalid company ID" });
+        return res.status(400).json({ 
+          message: "Invalid company ID",
+          error: "Invalid company ID format"
+        });
       }
       
       const company = await storage.getCompany(companyId);
       
       if (!company) {
-        return res.status(404).json({ message: "Company not found" });
+        return res.status(404).json({ 
+          message: "Company not found",
+          error: "Company not found"
+        });
       }
       
       // Check if user is the owner
       const dbUser = await getUserByFirebaseUid(req, res);
       
       if (!dbUser || !('id' in dbUser) || company.ownerId !== dbUser.id) {
-        return res.status(403).json({ message: "Not authorized to view this company" });
+        return res.status(403).json({ 
+          message: "Not authorized to view this company",
+          error: "User is not the owner of this company"
+        });
       }
       
       res.json(company);
     } catch (error) {
       console.error("Error getting company:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ 
+        message: "Internal server error",
+        error: error instanceof Error ? error.message : "Failed to fetch company"
+      });
     }
   });
   

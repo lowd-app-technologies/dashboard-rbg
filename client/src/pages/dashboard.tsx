@@ -78,8 +78,8 @@ export default function Dashboard() {
   return (
     <>
       <Helmet>
-        <title>Dashboard - NextAuth</title>
-        <meta name="description" content="Dashboard do sistema NextAuth" />
+        <title>Dashboard - Systems RBG</title>
+        <meta name="description" content="Dashboard do sistema Systems RBG" />
       </Helmet>
       <DashboardLayout title="Dashboard" contentId="dashboard-content">
         {isLoading ? (

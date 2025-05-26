@@ -1,4 +1,4 @@
-import { AuthLayout } from "@/components/layouts/auth-layout";
+import { TwoColumnAuthLayout } from "@/components/layouts/two-column-auth-layout";
 import { RegisterForm } from "@/components/auth/register-form";
 import { Helmet } from 'react-helmet';
 
@@ -6,12 +6,15 @@ export default function Register() {
   return (
     <>
       <Helmet>
-        <title>Create Account - NextAuth</title>
-        <meta name="description" content="Create a new NextAuth account to access secure authentication services." />
+        <title>Criar Conta - RBG</title>
+        <meta name="description" content="Crie sua conta RBG para começar a gerenciar seus negócios e projetos de forma eficiente." />
       </Helmet>
-      <AuthLayout title="Create a new account">
+      <TwoColumnAuthLayout 
+        title="Crie sua conta"
+        description="Preencha os dados abaixo para criar sua conta e começar a usar nossa plataforma."
+      >
         <RegisterForm />
-      </AuthLayout>
+      </TwoColumnAuthLayout>
     </>
   );
 }

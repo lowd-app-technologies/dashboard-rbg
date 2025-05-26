@@ -168,7 +168,7 @@ export default function JobOfferPage() {
   return (
     <>
       <Helmet>
-        <title>{isNewJobOffer ? "Nova Vaga" : "Editar Vaga"} - NextAuth</title>
+        <title>{isNewJobOffer ? "Nova Vaga" : "Editar Vaga"} - Systems RBG</title>
         <meta name="description" content="Cadastre ou edite uma vaga de emprego da sua empresa" />
       </Helmet>
       <DashboardLayout title={isNewJobOffer ? "Nova Vaga" : "Editar Vaga"} contentId="job-offer-content">

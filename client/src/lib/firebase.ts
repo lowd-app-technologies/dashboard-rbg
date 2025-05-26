@@ -39,6 +39,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+console.log("VITE_FIREBASE_API_KEY:", import.meta.env.VITE_FIREBASE_API_KEY);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
@@ -470,4 +471,4 @@ export const uploadServiceImage = async (companyId: string, serviceId: string, f
   }
 };
 
-export { auth, db, storage };
+export { auth, db, storage, app };

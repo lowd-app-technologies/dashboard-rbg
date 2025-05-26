@@ -11,7 +11,8 @@ import {
   LogOut,
   Building2,
   ShoppingBag,
-  Briefcase
+  Briefcase,
+  Shield
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -47,11 +48,12 @@ export function DashboardLayout({ children, title, contentId }: DashboardLayoutP
         <div className="hidden md:flex md:flex-shrink-0">
           <div className="flex flex-col w-64">
             <div className="flex flex-col h-0 flex-1 bg-gray-800">
-              <div className="flex items-center h-16 flex-shrink-0 px-4 bg-gray-900">
-                <h1 className="text-white font-bold text-xl flex items-center">
-                  <Lock className="mr-2 h-5 w-5" />
-                  NextAuth
-                </h1>
+              <div className="flex items-center justify-center h-24 flex-shrink-0 px-4 bg-gray-900">
+                <img 
+                  src="/assets/images/logo-rbg-horizontal-positivo.png" 
+                  alt="RBG Logo" 
+                  className="h-163 w-auto"
+                />
               </div>
               <div className="flex-1 flex flex-col overflow-y-auto">
                 <SidebarNav className="flex-1 px-2 py-4">
@@ -130,8 +132,8 @@ export function DashboardLayout({ children, title, contentId }: DashboardLayoutP
               <div className="flex flex-col h-full">
                 <div className="flex items-center justify-between h-16 px-4 bg-gray-900">
                   <h1 className="text-white font-bold text-xl flex items-center">
-                    <Lock className="mr-2 h-5 w-5" />
-                    NextAuth
+                    <Shield className="mr-2 h-5 w-5" />
+                    RBG
                   </h1>
                   <Button
                     variant="ghost"
@@ -225,21 +227,4 @@ export function DashboardLayout({ children, title, contentId }: DashboardLayoutP
   );
 }
 
-// Export the Lock icon for use in other components
-export function Lock(props: any) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
+

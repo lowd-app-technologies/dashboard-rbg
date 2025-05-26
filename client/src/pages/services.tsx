@@ -117,7 +117,7 @@ export default function Services() {
   return (
     <>
       <Helmet>
-        <title>Serviços - NextAuth</title>
+        <title>Serviços - Systems RBG</title>
         <meta name="description" content="Gerencie os serviços da sua empresa" />
       </Helmet>
       <DashboardLayout title="Serviços" contentId="services-content">

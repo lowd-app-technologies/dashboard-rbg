@@ -31,6 +31,8 @@ export default function CompanyProfile() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   
+  console.log('User auth status:', user);
+  
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
@@ -46,15 +48,36 @@ export default function CompanyProfile() {
   // Fetch companies
   const { data: companies = [], isLoading: isFetching, error } = useQuery({
     queryKey: ['/api/companies'],
-    queryFn: API.getCompanies,
+    queryFn: async () => {
+      try {
+        console.log('Fetching companies...');
+        const result = await API.getCompanies();
+        console.log('Companies fetched:', result);
+        return result;
+      } catch (error) {
+        console.error('Error fetching companies:', error);
+        throw error;
+      }
+    },
     enabled: !!user
   });
   
   const company = companies.length > 0 ? companies[0] : null;
+  console.log('Current company:', company);
 
   // Create company mutation
   const createCompanyMutation = useMutation({
-    mutationFn: (data: CompanyFormValues) => API.createCompany(data),
+    mutationFn: async (data: CompanyFormValues) => {
+      console.log('Creating company with data:', data);
+      try {
+        const result = await API.createCompany(data);
+        console.log('Company created:', result);
+        return result;
+      } catch (error) {
+        console.error('Error creating company:', error);
+        throw error;
+      }
+    },
     onSuccess: (newCompany) => {
       toast({
         title: "Sucesso",
@@ -72,8 +95,17 @@ export default function CompanyProfile() {
 
   // Update company mutation
   const updateCompanyMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number, data: CompanyFormValues }) => 
-      API.updateCompany(id, data),
+    mutationFn: async ({ id, data }: { id: number, data: CompanyFormValues }) => {
+      console.log('Updating company with id:', id, 'and data:', data);
+      try {
+        const result = await API.updateCompany(id, data);
+        console.log('Company updated:', result);
+        return result;
+      } catch (error) {
+        console.error('Error updating company:', error);
+        throw error;
+      }
+    },
     onSuccess: () => {
       toast({
         title: "Sucesso",
@@ -137,7 +169,7 @@ export default function CompanyProfile() {
   return (
     <>
       <Helmet>
-        <title>{company ? "Editar Empresa" : "Cadastrar Empresa"} - NextAuth</title>
+        <title>{company ? "Editar Empresa" : "Cadastrar Empresa"} - Systems RBG</title>
         <meta name="description" content="Gerencie as informações da sua empresa" />
       </Helmet>
       <DashboardLayout title={company ? "Perfil da Empresa" : "Cadastrar Empresa"} contentId="company-profile-content">
@@ -200,9 +232,9 @@ export default function CompanyProfile() {
                       name="cnpj"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>CNPJ</FormLabel>
+                          <FormLabel>NIF</FormLabel>
                           <FormControl>
-                            <Input placeholder="XX.XXX.XXX/0001-XX" {...field} />
+                            <Input placeholder="XX.XXX.XXX-XX" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -218,7 +250,7 @@ export default function CompanyProfile() {
                             <Phone className="mr-1 h-4 w-4" /> Telefone
                           </FormLabel>
                           <FormControl>
-                            <Input placeholder="(00) 00000-0000" {...field} />
+                            <Input placeholder="(+351) 912 345 678" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -235,7 +267,7 @@ export default function CompanyProfile() {
                           <MapPin className="mr-1 h-4 w-4" /> Endereço
                         </FormLabel>
                         <FormControl>
-                          <Input placeholder="Rua, número, bairro, cidade/UF" {...field} />
+                          <Input placeholder="Rua, número, código postal, cidade" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -251,7 +283,7 @@ export default function CompanyProfile() {
                           <LinkIcon className="mr-1 h-4 w-4" /> Website
                         </FormLabel>
                         <FormControl>
-                          <Input placeholder="https://www.seusite.com.br" {...field} />
+                          <Input placeholder="https://www.seusite.pt" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

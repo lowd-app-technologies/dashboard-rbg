@@ -1,6 +1,5 @@
 import { ReactNode } from "react";
 import { Link } from "wouter";
-import { Lock } from "lucide-react";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -14,12 +13,15 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
         {/* App Logo */}
         <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900 flex items-center justify-center">
-            <Lock className="mr-2 h-6 w-6 text-primary" />
-            NextAuth
-          </h2>
+          <div className="flex justify-center mb-4">
+            <img 
+              src="/assets/images/logo-rbg-horizontal-positivo.png" 
+              alt="RBG Logo" 
+              className="h-12 w-auto"
+            />
+          </div>
           <p className="mt-2 text-sm text-gray-600">
-            {description || "Secure authentication for your Next.js app"}
+            {description || "Sistema de gerenciamento RBG"}
           </p>
         </div>
 
