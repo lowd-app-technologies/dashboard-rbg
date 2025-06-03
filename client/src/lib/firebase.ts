@@ -92,11 +92,11 @@ export const loginWithGoogle = async () => {
     }
     
     return userCredential;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Google sign-in error:", error);
     
     // Mostra informações de depuração para ajudar com o problema de domínio
-    if (error.code === "auth/unauthorized-domain") {
+    if (error && typeof error === 'object' && 'code' in error && error.code === "auth/unauthorized-domain") {
       console.log("Domínio não autorizado. Adicione este domínio ao Firebase Console:");
       console.log(window.location.hostname);
     }
@@ -146,13 +146,20 @@ export interface Company {
   id?: string;
   name: string;
   description: string;
-  cnpj?: string;
-  address?: string;
-  phone?: string;
-  website?: string;
-  ownerId: string;
-  createdAt?: any;
-  updatedAt?: any;
+  nif: string | null;              // NIF (Número de Identificação Fiscal) - substitui o CNPJ
+  email: string | null;            // Email de contato da empresa
+  phone: string | null;            // Telefone de contato
+  address: string | null;          // Endereço completo
+  postalCode: string | null;       // Código Postal (formato: XXXX-XXX)
+  city: string | null;            // Localidade/Cidade
+  country: string;                 // País (padrão: Portugal)
+  website: string | null;         // Website da empresa
+  caeCode: string | null;          // Código CAE (Classificação de Atividades Econômicas)
+  constitutionDate: string | null; // Data de constituição (formato: YYYY-MM-DD)
+  shareCapital: number | null;     // Capital Social (em euros)
+  ownerId: string;                // ID do proprietário/usuário
+  createdAt?: any;                 // Timestamp de criação
+  updatedAt?: any;                 // Timestamp de atualização
 }
 
 export const createCompany = async (companyData: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -209,9 +216,25 @@ export const getCompanyById = async (companyId: string) => {
     const companyDoc = await getDoc(companyRef);
     
     if (companyDoc.exists()) {
+      const data = companyDoc.data();
       return {
         id: companyId,
-        ...companyDoc.data()
+        name: data.name || '',
+        description: data.description || '',
+        nif: data.nif || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        address: data.address || null,
+        postalCode: data.postalCode || null,
+        city: data.city || null,
+        country: data.country || 'Portugal',
+        website: data.website || null,
+        caeCode: data.caeCode || null,
+        constitutionDate: data.constitutionDate || null,
+        shareCapital: data.shareCapital !== undefined ? data.shareCapital : null,
+        ownerId: data.ownerId,
+        createdAt: data.createdAt || null,
+        updatedAt: data.updatedAt || null
       } as Company;
     }
     
@@ -229,9 +252,25 @@ export const getUserCompanies = async (userId: string) => {
     
     const companies: Company[] = [];
     querySnapshot.forEach((doc) => {
+      const data = doc.data();
       companies.push({
         id: doc.id,
-        ...doc.data()
+        name: data.name || '',
+        description: data.description || '',
+        nif: data.nif || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        address: data.address || null,
+        postalCode: data.postalCode || null,
+        city: data.city || null,
+        country: data.country || 'Portugal',
+        website: data.website || null,
+        caeCode: data.caeCode || null,
+        constitutionDate: data.constitutionDate || null,
+        shareCapital: data.shareCapital !== undefined ? data.shareCapital : null,
+        ownerId: data.ownerId,
+        createdAt: data.createdAt || null,
+        updatedAt: data.updatedAt || null
       } as Company);
     });
     

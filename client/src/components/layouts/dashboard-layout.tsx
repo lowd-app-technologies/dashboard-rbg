@@ -52,7 +52,7 @@ export function DashboardLayout({ children, title, contentId }: DashboardLayoutP
                 <img 
                   src="/assets/images/logo-rbg-horizontal-positivo.png" 
                   alt="RBG Logo" 
-                  className="h-163 w-auto"
+                  className="h-16 w-auto"
                 />
               </div>
               <div className="flex-1 flex flex-col overflow-y-auto">

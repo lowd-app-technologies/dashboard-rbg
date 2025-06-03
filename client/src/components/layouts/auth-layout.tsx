@@ -17,7 +17,7 @@ export function AuthLayout({ children, title, description }: AuthLayoutProps) {
             <img 
               src="/assets/images/logo-rbg-horizontal-positivo.png" 
               alt="RBG Logo" 
-              className="h-12 w-auto"
+              className="h-16 w-auto"
             />
           </div>
           <p className="mt-2 text-sm text-gray-600">

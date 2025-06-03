@@ -2,48 +2,86 @@ import { queryClient } from "./queryClient";
 import { auth } from '@/lib/firebase';
 import { getAuth } from 'firebase/auth';
 
-// Helpers
-const jsonHeaders = {
-  "Content-Type": "application/json",
+// Headers padrão para requisições JSON
+const jsonHeaders: Record<string, string> = {
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
 };
 
 // Interceptador para incluir token em todas as requisições
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   console.log('Fetching URL:', url);
   
-  const token = await getAuth().currentUser?.getIdToken();
-  console.log('Generated token:', token ? token.substring(0, 20) + '...' : 'No token');
-  
-  return fetch(url, {
-    ...options,
-    headers: {
-      ...options.headers,
-      ...jsonHeaders,
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-  });
+  try {
+    const auth = getAuth();
+    if (!auth.currentUser) {
+      console.error('No user is currently signed in');
+      throw new Error('No user is currently signed in');
+    }
+    
+    const token = await auth.currentUser.getIdToken(true); // Force token refresh
+    console.log('Generated token:', token ? `${token.substring(0, 10)}...` : 'No token');
+    
+    if (!token) {
+      console.error('Failed to get authentication token');
+      throw new Error('Failed to get authentication token');
+    }
+    
+    // Garantindo que os headers sejam do tipo HeadersInit
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...(options?.headers || {}),
+      'Authorization': `Bearer ${token}`
+    };
+
+    const fullUrl = url.startsWith('http') ? url : `${import.meta.env.VITE_API_BASE_URL || ''}${url}`;
+    console.log('Full URL:', fullUrl);
+
+    const response = await fetch(fullUrl, {
+      ...options,
+      headers,
+      credentials: 'include', // Importante para cookies de sessão
+    });
+
+    // Se recebermos um 401, tente renovar o token e repita a requisição
+    if (response.status === 401) {
+      console.log('Token expired, trying to refresh...');
+      const newToken = await auth.currentUser?.getIdToken(true);
+      if (newToken && newToken !== token) {
+        // Criar um novo objeto headers com o novo token
+        const newHeaders = {
+          ...headers,
+          'Authorization': `Bearer ${newToken}`
+        };
+        
+        return fetch(fullUrl, {
+          ...options,
+          headers: newHeaders,
+          credentials: 'include',
+        });
+      }
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Error in fetchWithAuth:', error);
+    throw error;
+  }
 };
 
-async function getAuthHeaders() {
-  console.log('Getting auth headers...');
-  const auth = getAuth();
-  const user = auth.currentUser;
+// Função para obter headers de autenticação
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken();
   
-  if (!user) {
-    console.log('No user authenticated');
-    return {};
+  if (!token) {
+    console.error('No auth token available');
+    return { 'Authorization': '' }; // Retorna um valor padrão vazio em vez de um objeto vazio
   }
   
-  try {
-    const token = await user.getIdToken();
-    console.log('Auth token:', token.substring(0, 20) + '...');
-    return {
-      Authorization: `Bearer ${token}`
-    };
-  } catch (error) {
-    console.error('Error getting auth token:', error);
-    return {};
-  }
+  return {
+    'Authorization': `Bearer ${token}`,
+  };
 }
 
 export async function apiGet<T>(url: string): Promise<T> {
@@ -51,20 +89,26 @@ export async function apiGet<T>(url: string): Promise<T> {
   const authHeaders = await getAuthHeaders();
   
   try {
-    const response = await fetchWithAuth(url, {
+    // Adiciona a base URL da API se não estiver presente
+    let apiUrl = url;
+    if (!url.startsWith('/api')) {
+      apiUrl = `/api${url}`;
+    }
+
+    const headers: HeadersInit = {
+      ...jsonHeaders,
+      ...authHeaders
+    };
+
+    const response = await fetchWithAuth(apiUrl, {
       method: "GET",
-      headers: {
-        ...jsonHeaders,
-        ...authHeaders,
-      },
+      headers,
     });
 
     console.log('Response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API error:', errorData);
-      throw new Error(errorData.message || `API error: ${response.status}`);
+      await handleApiError(response);
     }
 
     const data = await response.json();
@@ -81,21 +125,27 @@ export async function apiPost<T>(url: string, data: any): Promise<T> {
   const authHeaders = await getAuthHeaders();
   
   try {
-    const response = await fetchWithAuth(url, {
+    // Adiciona a base URL da API se não estiver presente
+    let apiUrl = url;
+    if (!url.startsWith('/api')) {
+      apiUrl = `/api${url}`;
+    }
+
+    const headers: HeadersInit = {
+      ...jsonHeaders,
+      ...authHeaders
+    };
+
+    const response = await fetchWithAuth(apiUrl, {
       method: "POST",
-      headers: {
-        ...jsonHeaders,
-        ...authHeaders,
-      },
+      headers,
       body: JSON.stringify(data),
     });
 
     console.log('Response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API error:', errorData);
-      throw new Error(errorData.message || `API error: ${response.status}`);
+      await handleApiError(response);
     }
 
     const dataResponse = await response.json();
@@ -107,26 +157,58 @@ export async function apiPost<T>(url: string, data: any): Promise<T> {
   }
 }
 
+// Função auxiliar para tratamento de erros da API
+async function handleApiError(response: Response): Promise<never> {
+  let errorMessage = `Erro na requisição: ${response.status} ${response.statusText}`;
+  let errorData: any = {};
+  
+  try {
+    errorData = await response.json().catch(() => ({}));
+    console.error('API error response:', errorData);
+    
+    // Tenta extrair uma mensagem de erro útil
+    if (errorData.message) {
+      errorMessage = errorData.message;
+    } else if (errorData.error) {
+      errorMessage = typeof errorData.error === 'string' 
+        ? errorData.error 
+        : JSON.stringify(errorData.error);
+    } else if (errorData.errors) {
+      // Para erros de validação
+      const validationErrors = Object.values(errorData.errors).flat();
+      errorMessage = validationErrors.join('\n');
+    }
+  } catch (parseError) {
+    console.error('Error parsing error response:', parseError);
+    // Se não conseguir fazer parse do JSON, usa a mensagem padrão
+  }
+  
+  const error = new Error(errorMessage) as any;
+  error.status = response.status;
+  error.data = errorData;
+  throw error;
+}
+
 export async function apiPut<T>(url: string, data: any): Promise<T> {
   console.log('API PUT request:', url);
   const authHeaders = await getAuthHeaders();
   
   try {
+    const headers: HeadersInit = {
+      ...jsonHeaders,
+      ...authHeaders
+    };
+
     const response = await fetchWithAuth(url, {
       method: "PUT",
-      headers: {
-        ...jsonHeaders,
-        ...authHeaders,
-      },
+      headers,
       body: JSON.stringify(data),
     });
 
     console.log('Response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API error:', errorData);
-      throw new Error(errorData.message || `API error: ${response.status}`);
+      await handleApiError(response);
     }
 
     const dataResponse = await response.json();
@@ -143,20 +225,20 @@ export async function apiDelete<T>(url: string): Promise<T> {
   const authHeaders = await getAuthHeaders();
   
   try {
+    const headers: HeadersInit = {
+      ...jsonHeaders,
+      ...authHeaders
+    };
+
     const response = await fetchWithAuth(url, {
       method: "DELETE",
-      headers: {
-        ...jsonHeaders,
-        ...authHeaders,
-      },
+      headers,
     });
 
     console.log('Response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API error:', errorData);
-      throw new Error(errorData.message || `API error: ${response.status}`);
+      await handleApiError(response);
     }
 
     const dataResponse = await response.json();
@@ -168,17 +250,28 @@ export async function apiDelete<T>(url: string): Promise<T> {
   }
 }
 
-// Define types to avoid 'in' operator issues
-interface CompanyData {
-  id: number;
-  name: string;
-  companyId?: number;
-  [key: string]: any;
-}
+// Import the Company type from firebase
+import { Company } from './firebase';
+
+// Type for API responses that include company data
+type ApiResponse<T> = T & {
+  id: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+// Type for company data in API requests/response
+type CompanyData = Omit<Company, 'id' | 'createdAt' | 'updatedAt' | 'ownerId'> & {
+  id?: string;
+  ownerId?: string;
+};
 
 interface ServiceData {
   id: number;
   name: string;
+  description: string;
+  price?: string;
+  workingHours?: string;
   companyId: number;
   [key: string]: any;
 }
@@ -186,6 +279,12 @@ interface ServiceData {
 interface JobOfferData {
   id: number;
   title: string;
+  description: string;
+  employmentType: string;
+  salaryRange?: string;
+  requirements?: string;
+  contactEmail?: string;
+  contactLink?: string;
   companyId: number;
   [key: string]: any;
 }
@@ -193,25 +292,77 @@ interface JobOfferData {
 // API endpoints
 export const API = {
   // Companies
-  getCompanies: async (): Promise<CompanyData[]> => {
-    return apiGet<CompanyData[]>('/api/companies');
+  getCompanies: async (): Promise<Company[]> => {
+    console.log('[API] Iniciando getCompanies...');
+    try {
+      // Verifica se há um usuário autenticado
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.error('[API] Nenhum usuário autenticado');
+        throw new Error('Usuário não autenticado');
+      }
+      
+      // Obtém o token de forma forçada para garantir que está atualizado
+      const token = await currentUser.getIdToken(true);
+      console.log('[API] Token obtido:', token ? `${token.substring(0, 10)}...` : 'Sem token');
+      
+      if (!token) {
+        console.error('[API] Falha ao obter token de autenticação');
+        throw new Error('Falha na autenticação: token não disponível');
+      }
+      
+      console.log('[API] Fazendo requisição para /api/companies');
+      const response = await apiGet<{ data: Company[] }>('/api/companies');
+      
+      console.log('[API] Resposta recebida:', {
+        status: 'success',
+        hasData: !!response?.data,
+        dataLength: response?.data?.length || 0
+      });
+      
+      if (!response || !response.data) {
+        console.error('[API] Resposta inválida da API:', response);
+        throw new Error('Resposta inválida do servidor');
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('[API] Erro em getCompanies:', {
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'UnknownError'
+      });
+      
+      // Tratamento específico para erros de autenticação
+      if (error instanceof Error && error.message.includes('401')) {
+        console.log('[API] Erro de autenticação, redirecionando para login...');
+        // Aqui você pode adicionar lógica para redirecionar para a página de login
+        // ou disparar um evento de logout
+      }
+      
+      // Propaga o erro para ser tratado pelo componente
+      throw error;
+    }
   },
   
-  getCompany: async (id: number): Promise<CompanyData> => {
-    return apiGet<CompanyData>(`/api/companies/${id}`);
+  getCompany: async (id: string): Promise<Company> => {
+    const response = await apiGet<{ data: Company }>(`/api/companies/${id}`);
+    return response.data;
   },
   
-  createCompany: async (data: any): Promise<CompanyData> => {
-    const newCompany = await apiPost<CompanyData>('/api/companies', data);
+  createCompany: async (data: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>): Promise<Company> => {
+    const response = await apiPost<{ data: Company }>('/api/companies', data);
     queryClient.invalidateQueries({ queryKey: ['/api/companies'] });
-    return newCompany;
+    return response.data;
   },
   
-  updateCompany: async (id: number, data: any): Promise<CompanyData> => {
-    const updated = await apiPut<CompanyData>(`/api/companies/${id}`, data);
+  updateCompany: async (id: string, data: Partial<Omit<Company, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Company> => {
+    const response = await apiPut<{ data: Company }>(`/api/companies/${id}`, data);
     queryClient.invalidateQueries({ queryKey: ['/api/companies'] });
     queryClient.invalidateQueries({ queryKey: ['/api/companies', id] });
-    return updated;
+    return response.data;
   },
   
   // Services
@@ -223,13 +374,13 @@ export const API = {
     return apiGet<ServiceData>(`/api/services/${id}`);
   },
   
-  createService: async (companyId: number, data: any): Promise<ServiceData> => {
+  createService: async (companyId: number, data: Omit<ServiceData, 'id' | 'companyId'>): Promise<ServiceData> => {
     const newService = await apiPost<ServiceData>(`/api/companies/${companyId}/services`, data);
     queryClient.invalidateQueries({ queryKey: [`/api/companies/${companyId}/services`] });
     return newService;
   },
   
-  updateService: async (id: number, data: any): Promise<ServiceData> => {
+  updateService: async (id: number, data: Partial<Omit<ServiceData, 'id' | 'companyId'>>): Promise<ServiceData> => {
     const updated = await apiPut<ServiceData>(`/api/services/${id}`, data);
     // Get the updated service
     const service = await apiGet<ServiceData>(`/api/services/${id}`);
@@ -261,9 +412,7 @@ export const API = {
   },
   
   deleteServiceImage: async (imageId: number): Promise<any> => {
-    const result = await apiDelete(`/api/service-images/${imageId}`);
-    // We don't know which service the image belongs to here, so we can't invalidate specifically
-    return result;
+    return apiDelete(`/api/service-images/${imageId}`);
   },
   
   // Job Offers
@@ -275,16 +424,15 @@ export const API = {
     return apiGet<JobOfferData>(`/api/job-offers/${id}`);
   },
   
-  createJobOffer: async (companyId: number, data: any): Promise<JobOfferData> => {
+  createJobOffer: async (companyId: number, data: Omit<JobOfferData, 'id' | 'companyId'>): Promise<JobOfferData> => {
     const newJobOffer = await apiPost<JobOfferData>(`/api/companies/${companyId}/job-offers`, data);
     queryClient.invalidateQueries({ queryKey: [`/api/companies/${companyId}/job-offers`] });
     return newJobOffer;
   },
   
-  updateJobOffer: async (id: number, data: any): Promise<JobOfferData> => {
+  updateJobOffer: async (id: number, data: Partial<Omit<JobOfferData, 'id' | 'companyId'>>): Promise<JobOfferData> => {
     const updated = await apiPut<JobOfferData>(`/api/job-offers/${id}`, data);
-    
-    // Get the updated job offer
+    // Get the updated job offer to know which company it belongs to
     const jobOffer = await apiGet<JobOfferData>(`/api/job-offers/${id}`);
     
     if (jobOffer && jobOffer.companyId) {
